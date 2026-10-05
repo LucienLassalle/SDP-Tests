@@ -1,4 +1,5 @@
 import os
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -44,6 +45,21 @@ def sdp_image():
     if not image:
         pytest.fail("SDP_IMAGE doit indiquer l'image Docker de SDP à analyser")
     return image
+
+
+@pytest.fixture(scope="session")
+def compose_images(sdp_src):
+    """Images référencées par le docker-compose.yml de SDP."""
+    compose = shlex.split(os.environ.get("COMPOSE", f"{CONTAINER_ENGINE} compose"))
+    # Les variables obligatoires du compose ne servent pas à lister les images
+    env = {"SESSION_SECRET": "unused", **os.environ}
+    result = subprocess.run(
+        [*compose, "-f", str(sdp_src / "docker-compose.yml"), "config", "--images"],
+        capture_output=True, text=True, env=env,
+    )
+    if result.returncode != 0:
+        pytest.fail(f"Impossible de lister les images du compose :\n{result.stderr}")
+    return sorted(set(result.stdout.split()))
 
 
 @pytest.fixture(scope="session")
