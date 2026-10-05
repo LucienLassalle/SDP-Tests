@@ -12,7 +12,7 @@ def assert_clean(result, target):
 
 
 def test_filesystem(trivy, sdp_src):
-    result = trivy("fs", *COMMON_ARGS, str(sdp_src), mount=sdp_src)
+    result = trivy("fs", *COMMON_ARGS, "--scanners", "vuln,secret,misconfig", str(sdp_src), mount=sdp_src)
     assert_clean(result, sdp_src)
 
 
