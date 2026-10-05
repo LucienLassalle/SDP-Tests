@@ -1,9 +1,41 @@
 # SDP-Tests
 
-## Analyse Trivy
+Tests de [SDP](https://github.com/LucienLassalle/SDP), lancés par la CI de SDP sur chaque pull request.
+Ce dépôt ne contient aucun workflow : c'est SDP qui le récupère et l'exécute contre son propre code.
 
-Le workflow GitHub Actions `Trivy` analyse le dépôt et l’image Docker à chaque push, pull request et déclenchement manuel.
+## Contenu
 
-Il utilise les scans de vulnérabilités Trivy en mode filesystem (`scan-type: fs`) puis sur l’image Docker construite (`scan-type: image`).
+| Marqueur     | Fichier               | Ce qui est testé                                                        |
+|--------------|-----------------------|-------------------------------------------------------------------------|
+| `static`     | `tests/test_trivy.py`   | Trivy sur le code (vulnérabilités, secrets, mauvaises configurations) et sur l'image Docker ; CRITICAL/HIGH bloquants |
+| `static`     | `tests/test_systemd.py` | `systemd-analyze security` sur `deploy/*.service` : score d'exposition max `SYSTEMD_SECURITY_THRESHOLD` |
+| `functional` | `tests/test_app.py`     | Tests de l'application déployée (pages, CSRF, recherche, échappement, accents) |
 
-Les résultats sont exportés au format SARIF et publiés comme artefact de workflow; les vulnérabilités critiques et hautes sont fatales pour bloquer la validation.
+Les analyses statiques passent en premier : si elles échouent, l'application n'est pas déployée.
+
+## Lancer en local
+
+```bash
+python3 -m pip install -r requirements.txt
+
+# 1. Analyses statiques (binaire `trivy` si présent, sinon image Docker épinglée dans conftest.py)
+docker build -t sdp:local ../SDP
+SDP_SRC=../SDP SDP_IMAGE=sdp:local pytest -m static
+
+# 2. Tests fonctionnels sur l'application démarrée
+(cd ../SDP && SESSION_SECRET=dev docker compose up -d)
+SDP_URL=http://localhost:3000 pytest -m functional
+```
+
+| Variable              | Défaut                  | Rôle                                  |
+|-----------------------|-------------------------|---------------------------------------|
+| `SDP_SRC`             | `../SDP`                | Code source analysé par Trivy         |
+| `SDP_IMAGE`           | —                       | Image Docker analysée par Trivy       |
+| `SDP_URL`             | `http://localhost:3000` | Application testée                    |
+| `SDP_STARTUP_TIMEOUT` | `120`                   | Attente max (s) du démarrage de l'app |
+| `SYSTEMD_SECURITY_THRESHOLD` | `5`              | Score d'exposition systemd max accepté |
+
+## Versions
+
+La CI de SDP utilise pour l'instant la branche `main` de ce dépôt. À terme, elle utilisera une release fixe
+(tag `vX.Y.Z`) pour que les tests ne changent pas sans une modification explicite dans SDP.
