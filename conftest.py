@@ -5,12 +5,23 @@ from pathlib import Path
 
 import pytest
 
-# Image officielle épinglée par digest (0.74.0), utilisée si trivy n'est pas installé
+# Images officielles épinglées par digest, utilisées si l'outil n'est pas installé
 TRIVY_IMAGE = (
     "aquasec/trivy:0.74.0"
     "@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
 )
 TRIVY_CACHE = Path(os.environ.get("TRIVY_CACHE_DIR", Path.home() / ".cache" / "trivy"))
+# docker ou podman
+CONTAINER_ENGINE = os.environ.get("CONTAINER_ENGINE", "docker")
+DOCKER_SOCKET = Path("/var/run/docker.sock")
+
+
+def container(image, *args, volumes=()):
+    """Commande pour lancer un outil dans un conteneur jetable."""
+    cmd = [CONTAINER_ENGINE, "run", "--rm", "--security-opt", "label=disable"]
+    for volume in volumes:
+        cmd += ["-v", volume]
+    return [*cmd, image, *args]
 
 
 @pytest.fixture(scope="session")
@@ -40,14 +51,13 @@ def trivy():
         if shutil.which("trivy"):
             cmd = ["trivy", "--cache-dir", str(TRIVY_CACHE), *args]
         else:
-            cmd = [
-                "docker", "run", "--rm",
-                "-v", "/var/run/docker.sock:/var/run/docker.sock",
-                "-v", f"{TRIVY_CACHE}:/root/.cache/trivy",
-            ]
+            volumes = [f"{TRIVY_CACHE}:/root/.cache/trivy"]
+            if DOCKER_SOCKET.exists():
+                volumes.append(f"{DOCKER_SOCKET}:{DOCKER_SOCKET}")
             if mount:
-                cmd += ["-v", f"{mount}:{mount}:ro"]
-            cmd += [TRIVY_IMAGE, *args]
+                volumes.append(f"{mount}:{mount}:ro")
+            cmd = container(TRIVY_IMAGE, *args, volumes=volumes)
         return subprocess.run(cmd, capture_output=True, text=True)
 
     return run
+
