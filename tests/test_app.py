@@ -1,30 +1,9 @@
-import os
 import re
-import time
 
 import pytest
 import requests
 
 pytestmark = pytest.mark.functional
-
-STARTUP_TIMEOUT = int(os.environ.get("SDP_STARTUP_TIMEOUT", "120"))
-
-
-@pytest.fixture(scope="module")
-def base_url():
-    """URL de l'application, attendue jusqu'à ce que la page d'accueil (et donc la BDD) réponde."""
-    url = os.environ.get("SDP_URL", "http://localhost:3000").rstrip("/")
-    deadline = time.monotonic() + STARTUP_TIMEOUT
-    last = None
-    while time.monotonic() < deadline:
-        try:
-            last = requests.get(url + "/", timeout=5)
-            if last.status_code == 200:
-                return url
-        except requests.RequestException as exc:
-            last = exc
-        time.sleep(2)
-    pytest.fail(f"{url} ne répond pas après {STARTUP_TIMEOUT}s : {last}")
 
 
 def test_home_lists_messages(base_url):
