@@ -2,9 +2,11 @@ import os
 import shlex
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
+import requests
 
 # Images officielles épinglées par digest, utilisées si l'outil n'est pas installé
 TRIVY_IMAGE = (
@@ -15,15 +17,22 @@ KICS_IMAGE = (
     "checkmarx/kics:v2.1.20"
     "@sha256:3e5a268eb8adda2e5a483c9359ddfc4cd520ab856a7076dc0b1d8784a37e2602"
 )
+ZAP_IMAGE = (
+    "ghcr.io/zaproxy/zaproxy:2.17.0"
+    "@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef"
+)
 TRIVY_CACHE = Path(os.environ.get("TRIVY_CACHE_DIR", Path.home() / ".cache" / "trivy"))
 # docker ou podman
 CONTAINER_ENGINE = os.environ.get("CONTAINER_ENGINE", "docker")
 DOCKER_SOCKET = Path("/var/run/docker.sock")
 
 
-def container(image, *args, volumes=()):
+STARTUP_TIMEOUT = int(os.environ.get("SDP_STARTUP_TIMEOUT", "120"))
+
+
+def container(image, *args, volumes=(), options=()):
     """Commande pour lancer un outil dans un conteneur jetable."""
-    cmd = [CONTAINER_ENGINE, "run", "--rm", "--security-opt", "label=disable"]
+    cmd = [CONTAINER_ENGINE, "run", "--rm", "--security-opt", "label=disable", *options]
     for volume in volumes:
         cmd += ["-v", volume]
     return [*cmd, image, *args]
@@ -94,5 +103,38 @@ def kics():
             cmd = container(KICS_IMAGE, *common, "-p", str(path),
                             volumes=[f"{path.parent}:{path.parent}:ro"])
         return subprocess.run(cmd, capture_output=True, text=True)
+
+    return run
+
+
+@pytest.fixture(scope="session")
+def base_url():
+    """URL de l'application, attendue jusqu'à ce que la page d'accueil (et donc la BDD) réponde."""
+    url = os.environ.get("SDP_URL", "http://localhost:3000").rstrip("/")
+    deadline = time.monotonic() + STARTUP_TIMEOUT
+    last = None
+    while time.monotonic() < deadline:
+        try:
+            last = requests.get(url + "/", timeout=5)
+            if last.status_code == 200:
+                return url
+        except requests.RequestException as exc:
+            last = exc
+        time.sleep(2)
+    pytest.fail(f"{url} ne répond pas après {STARTUP_TIMEOUT}s : {last}")
+
+
+@pytest.fixture(scope="session")
+def zap(tmp_path_factory):
+    """Lance un scan ZAP (image Docker) et renvoie le résultat et le dossier des rapports."""
+
+    def run(script, *args):
+        reports = tmp_path_factory.mktemp("zap")
+        # L'image tourne avec l'utilisateur zap, qui doit pouvoir écrire ses rapports
+        reports.chmod(0o777)
+        # Réseau de l'hôte : l'application écoute sur localhost
+        cmd = container(ZAP_IMAGE, script, *args, volumes=[f"{reports}:/zap/wrk:rw"],
+                        options=["--network", "host"])
+        return subprocess.run(cmd, capture_output=True, text=True), reports
 
     return run
