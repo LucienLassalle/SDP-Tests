@@ -7,18 +7,32 @@ Ce dépôt ne contient aucun workflow : c'est SDP qui le récupère et l'exécut
 
 | Marqueur     | Fichier               | Ce qui est testé                                                        |
 |--------------|-----------------------|-------------------------------------------------------------------------|
+| `lint`       | `tests/test_lint.py`    | ESLint (`*.js`), hadolint (`Dockerfile`), ShellCheck (`*.sh`) et actionlint (`.github/workflows`) ; configuration dans `lint/` |
 | `static`     | `tests/test_trivy.py`   | Trivy sur le code (vulnérabilités, secrets, mauvaises configurations) et sur l'image Docker ; CRITICAL/HIGH bloquants |
 | `static`     | `tests/test_compose.py` | KICS sur `docker-compose.yml` (secrets, ports, capabilities...) et Trivy sur chaque image du compose ; CRITICAL/HIGH bloquants |
 | `static`     | `tests/test_systemd.py` | `systemd-analyze security` sur `deploy/*.service` : score d'exposition max `SYSTEMD_SECURITY_THRESHOLD` |
-| `functional` | `tests/test_app.py`     | Tests de l'application déployée (pages, connexion avec jeton CSRF, recherche, échappement, accents) |
+| `functional` | `tests/test_app.py`     | Tests de l'application déployée, une classe par fonctionnalité : accueil (`TestHome`), connexion/déconnexion (`TestLogin`), publication (`TestPost`), recherche (`TestSearch`) |
 | `functional`, `fuzz` | `tests/test_zap.py` | Fuzzing par [OWASP ZAP](https://www.zaproxy.org/docs/docker/full-scan/) : exploration puis scan actif (injections SQL, XSS, commandes...) ; alertes High bloquantes |
 
-Les analyses statiques passent en premier : si elles échouent, l'application n'est pas déployée.
+Les linters ne construisent rien et passent en premier. Viennent ensuite les analyses statiques :
+si elles échouent, l'application n'est pas déployée.
+
+Les linters sont épinglés comme le reste : hadolint, ShellCheck et actionlint par `requirements.txt`
+(binaires publiés sur PyPI), ESLint par `package.json` / `package-lock.json` (Node.js 20.19+, 22.13+ ou 24+).
+Dependabot suit les deux. Les règles hadolint ignorées sont justifiées dans `lint/hadolint.yaml`.
+
+Les tests fonctionnels s'appuient sur les comptes et messages de `db/init.sql` de SDP (`USERS` et
+`SEED_MESSAGES` en tête de `tests/test_app.py`) et publient des messages : ils sont prévus pour une base
+jetable, comme celle de la CI.
 
 ## Lancer en local
 
 ```bash
 python3 -m pip install -r requirements.txt
+npm ci
+
+# 0. Linters (aucun build nécessaire)
+SDP_SRC=../SDP pytest -m lint
 
 # 1. Analyses statiques (binaires `trivy` / `kics` si présents, sinon images épinglées dans conftest.py)
 docker build -t sdp:local ../SDP
