@@ -7,7 +7,7 @@ import pytest
 pytestmark = pytest.mark.static
 
 # Score d'exposition max accepté (0 = très restreint, 10 = aucune restriction)
-THRESHOLD = os.environ.get("SYSTEMD_SECURITY_THRESHOLD", "5")
+THRESHOLD = float(os.environ.get("SYSTEMD_SECURITY_THRESHOLD", "5"))
 
 
 def test_services_are_hardened(sdp_src):
@@ -22,8 +22,10 @@ def test_services_are_hardened(sdp_src):
 
     failures = []
     for unit in units:
+        # --threshold attend le score sur 100
         result = subprocess.run(
-            ["systemd-analyze", "security", "--offline=true", f"--threshold={THRESHOLD}", str(unit)],
+            ["systemd-analyze", "security", "--offline=true",
+             f"--threshold={round(THRESHOLD * 10)}", str(unit)],
             capture_output=True, text=True,
         )
         if result.returncode != 0:

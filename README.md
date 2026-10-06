@@ -8,8 +8,9 @@ Ce dépôt ne contient aucun workflow : c'est SDP qui le récupère et l'exécut
 | Marqueur     | Fichier               | Ce qui est testé                                                        |
 |--------------|-----------------------|-------------------------------------------------------------------------|
 | `static`     | `tests/test_trivy.py`   | Trivy sur le code (vulnérabilités, secrets, mauvaises configurations) et sur l'image Docker ; CRITICAL/HIGH bloquants |
+| `static`     | `tests/test_compose.py` | KICS sur `docker-compose.yml` (secrets, ports, capabilities...) et Trivy sur chaque image du compose ; CRITICAL/HIGH bloquants |
 | `static`     | `tests/test_systemd.py` | `systemd-analyze security` sur `deploy/*.service` : score d'exposition max `SYSTEMD_SECURITY_THRESHOLD` |
-| `functional` | `tests/test_app.py`     | Tests de l'application déployée (pages, CSRF, recherche, échappement, accents) |
+| `functional` | `tests/test_app.py`     | Tests de l'application déployée (pages, connexion avec jeton CSRF, recherche, échappement, accents) |
 
 Les analyses statiques passent en premier : si elles échouent, l'application n'est pas déployée.
 
@@ -18,22 +19,27 @@ Les analyses statiques passent en premier : si elles échouent, l'application n'
 ```bash
 python3 -m pip install -r requirements.txt
 
-# 1. Analyses statiques (binaire `trivy` si présent, sinon image Docker épinglée dans conftest.py)
+# 1. Analyses statiques (binaires `trivy` / `kics` si présents, sinon images épinglées dans conftest.py)
 docker build -t sdp:local ../SDP
 SDP_SRC=../SDP SDP_IMAGE=sdp:local pytest -m static
 
 # 2. Tests fonctionnels sur l'application démarrée
-(cd ../SDP && SESSION_SECRET=dev docker compose up -d)
-SDP_URL=http://localhost:3000 pytest -m functional
+(cd ../SDP && SESSION_SECRET=dev docker compose up -d --wait)
+(cd ../SDP && docker compose run --rm --no-deps --entrypoint cat tls /tls/cert.pem) > /tmp/sdp-ca.pem
+SDP_URL=https://localhost REQUESTS_CA_BUNDLE=/tmp/sdp-ca.pem pytest -m functional
 ```
 
 | Variable              | Défaut                  | Rôle                                  |
 |-----------------------|-------------------------|---------------------------------------|
 | `SDP_SRC`             | `../SDP`                | Code source analysé par Trivy         |
 | `SDP_IMAGE`           | —                       | Image Docker analysée par Trivy       |
-| `SDP_URL`             | `http://localhost:3000` | Application testée                    |
+| `SDP_URL`             | `http://localhost:3000` | Application testée (`https://localhost` avec SDP actuel) |
+| `REQUESTS_CA_BUNDLE`  | —                       | Certificat autosigné de SDP, pour le vérifier |
 | `SDP_STARTUP_TIMEOUT` | `120`                   | Attente max (s) du démarrage de l'app |
 | `SYSTEMD_SECURITY_THRESHOLD` | `5`              | Score d'exposition systemd max accepté |
+| `CONTAINER_ENGINE`    | `docker`                | `docker` ou `podman`, pour lancer Trivy et KICS |
+| `COMPOSE`             | `$CONTAINER_ENGINE compose` | Commande compose utilisée pour lister les images |
+| `IMAGE_TAG`           | `dev`                   | Tag de l'image SDP dans le compose (doit correspondre à `SDP_IMAGE`) |
 
 ## Versions
 
