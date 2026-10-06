@@ -21,9 +21,10 @@ Les linters sont épinglés comme le reste : hadolint, ShellCheck et actionlint 
 (binaires publiés sur PyPI), ESLint par `package.json` / `package-lock.json` (Node.js 20.19+, 22.13+ ou 24+).
 Dependabot suit les deux. Les règles hadolint ignorées sont justifiées dans `lint/hadolint.yaml`.
 
-Les tests fonctionnels s'appuient sur les comptes et messages de `db/init.sql` de SDP (`USERS` et
-`SEED_MESSAGES` en tête de `tests/test_app.py`) et publient des messages : ils sont prévus pour une base
-jetable, comme celle de la CI.
+La base de SDP démarre vide : les tests fonctionnels créent leurs propres comptes (via `/register`,
+identifiants aléatoires) et publient des messages, ils sont donc prévus pour une base jetable, comme celle
+de la CI. Ils vérifient aussi que les anciens comptes par défaut (`alice`, `bob`, `charlie`, `admin`)
+n'existent plus.
 
 ## Lancer en local
 
