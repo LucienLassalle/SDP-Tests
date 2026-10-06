@@ -1,2 +1,6 @@
 pytest==9.1.1
 requests==2.34.2
+# Linters (tests/test_lint.py), binaires fournis par PyPI
+actionlint-py==1.7.12.25
+hadolint-bin==2.15.1
+shellcheck-py==0.11.0.1

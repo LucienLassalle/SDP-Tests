@@ -1,0 +1,7 @@
+# Configuration hadolint appliquée aux Dockerfile de SDP (tests/test_lint.py)
+# Les "info" sont affichées sans bloquer ; warning et error bloquent
+failure-threshold: warning
+ignored:
+  # Versions apk non épinglées : l'image de base est épinglée par digest et suivie par Dependabot,
+  # épingler les paquets casse le build dès qu'Alpine retire l'ancienne version de ses dépôts
+  - DL3018
