@@ -1,7 +1,5 @@
 """Tests fonctionnels de l'application déployée : chaque page et chaque action du forum."""
-import os
 import re
-import time
 import uuid
 
 import pytest
@@ -9,7 +7,6 @@ import requests
 
 pytestmark = pytest.mark.functional
 
-STARTUP_TIMEOUT = int(os.environ.get("SDP_STARTUP_TIMEOUT", "120"))
 TIMEOUT = 10
 
 # Comptes et messages créés par db/init.sql de SDP
@@ -21,24 +18,7 @@ SEED_MESSAGES = [  # du plus ancien au plus récent
 ]
 
 
-# --- Fixtures -----------------------------------------------------------------
-
-@pytest.fixture(scope="module")
-def base_url():
-    """URL de l'application, attendue jusqu'à ce que la page d'accueil (et donc la BDD) réponde."""
-    url = os.environ.get("SDP_URL", "http://localhost:3000").rstrip("/")
-    deadline = time.monotonic() + STARTUP_TIMEOUT
-    last = None
-    while time.monotonic() < deadline:
-        try:
-            last = requests.get(url + "/", timeout=5)
-            if last.status_code == 200:
-                return url
-        except requests.RequestException as exc:
-            last = exc
-        time.sleep(2)
-    pytest.fail(f"{url} ne répond pas après {STARTUP_TIMEOUT}s : {last}")
-
+# --- Fixtures (base_url est dans conftest.py) ----------------------------------
 
 @pytest.fixture
 def client(base_url):
